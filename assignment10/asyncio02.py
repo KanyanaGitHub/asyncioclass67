@@ -1,10 +1,12 @@
 # example of using an asyncio queue without blocking
 from random import random
 import asyncio
+import time
  
 # coroutine to generate work
 async def producer(queue):
     print('Producer: Running')
+    start_time = time.time()  # Record the start time
     # generate work
     for i in range(10):
         # generate a value
@@ -19,6 +21,8 @@ async def producer(queue):
     # send an all done signal
     await queue.put(None)
     print('Producer: Done')
+    end_time = time.time()  # Record the end time
+    print(f"Producer took {end_time - start_time:.2f} seconds")
  
 # coroutine to consume work
 async def consumer(queue):
@@ -39,6 +43,7 @@ async def consumer(queue):
         print(f'\t> Consumer got {item}')
     # all done
     print('Consumer: Done')
+    
  
 # entry point coroutine
 async def main():
