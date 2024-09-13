@@ -29,31 +29,34 @@ class Customer:
 # After finishing processing the data, 
 # we use queue.task_done() to tell the queue that the data has been successfully processed.
 async def checkout_customer(queue: Queue, cashier_number: int):
-    count=0
-    Cashier_time=0
+    customer_count = 0  # Counter for the number of customers served.
+    total_checkout_time = 0  # Total time spent by this cashier.
+    total_time = 0
     while not queue.empty():
         customer: Customer = await queue.get()
-        count+=1
-        print(f"The Cashiert_{cashier_number} "
-              f"will checkout Customer_{customer.customer_id}")
-        await asyncio.sleep(0)
+        customer_start_time = time.perf_counter()
+        print(f"Cashier_{cashier_number} will checkout Customer_{customer.customer_id}")
+
         for product in customer.products:
-            if cashier_number==2:
-                product.checkout_time = 0.1
-                Cashier_time+=product.checkout_time
+            if cashier_number == 2:
+                adjusted_time = 0.1  # Cashier_2 ปรับ cashier 2 
+                total_time += 0.1
             else:
-                product.checkout_time = round(product.checkout_time + (0.1*cashier_number),ndigits=2)
-                Cashier_time+=product.checkout_time
-                
-            print(f"The Chasier_{cashier_number} "
-                  f"will checkout Customer_{customer.customer_id}'s "
-                  f"Product_{product.product_name} "
-                  f"in {product.checkout_time} secs")
-            await asyncio.sleep(product.checkout_time)
-        print(f"The Chasier_{cashier_number} "
-              f"finished checkout Customer_{customer.customer_id} ")
+                adjusted_time = round(product.checkout_time + (0.1 * cashier_number), 2)
+                total_time += adjusted_time
+
+            print(f"Cashier_{cashier_number} checking out Customer_{customer.customer_id}'s "
+                  f"{product.product_name} in {adjusted_time} secs")
+            await asyncio.sleep(adjusted_time)
+
+        print(f"Cashier_{cashier_number} finished Customer_{customer.customer_id} "
+              f"in {round(time.perf_counter() - customer_start_time, ndigits=2)} secs")
+        
         queue.task_done()
-    return (f"cashier{cashier_number} take {count}customers in {Cashier_time} sec")
+        customer_count += 1
+        total_checkout_time += time.perf_counter() - customer_start_time
+
+    return customer_count, total_time
 
 
 # we implement the generate_customer method as a factory method for producing customers.
@@ -73,16 +76,15 @@ def generate_customer(customer_id: int) -> Customer:
 async def customer_generation(queue: Queue, customers: int):
     customer_count = 0
     while True:
-        customers = [generate_customer(the_id)
-                     for the_id in range(customer_count, customer_count+customers)]
+        customers = [generate_customer(the_id) for the_id in range(customer_count, customer_count + customers)]
         for customer in customers:
             print(f"Waiting to put Customer_{customer.customer_id} in line.... ")
             await queue.put(customer)
             print(f"Customer_{customer.customer_id} put in line...")
-        customer_count = customer_count + len(customers)
+        customer_count += len(customers)
         await asyncio.sleep(.001)
         return customer_count
-
+    
 # Finally, we use the main method to initialize the queue, 
 # producer, and consumer, and start all concurrent tasks.
 async def main():
@@ -93,20 +95,17 @@ async def main():
     customers_start_time = time.perf_counter()
     
     async with asyncio.TaskGroup() as group:
-        customer_group = group.create_task(customer_generation(customer_queue,CUSTOMER))
-        cashier_group = [group.create_task(checkout_customer(customer_queue,i)) for i in range(CASHIER)]
-
-    for cg in cashier_group:
-        if cg.result():
-            cashier=cg.result()
-            # print(f"The cashier+{cashier['id']}"
-            #       f"take {cashier['customer']} customers"
-            #       f"total {round(cashier['time'],ndigits=2)} secs.")
-            print(cashier)
-    if customer_group.result():
-        print(f"The supermarket process finished "
-            f"{customer_group.result()} customers "
-            f"in {round(time.perf_counter() - customers_start_time ,ndigits=2)} secs")
+        customer_producer = group.create_task(customer_generation(customer_queue, CUSTOMER))
+        cashiers = [group.create_task(checkout_customer(customer_queue, i)) for i in range(CASHIER)]
     
+    results = await asyncio.gather(customer_producer, *cashiers)
+    
+    print("---------------------- Cashier Performance ----------------------")
+    for i, (customer_count, total_checkout_time) in enumerate(results[1:], start=0):
+        print(f"Cashier_{i} took {customer_count} customers in {round(total_checkout_time, ndigits=2)} secs.")
+    print("---------------------------------------------------------------")
+    print(f"The supermarket process finished {results[0]} customers "
+          f"in {round(time.perf_counter() - customers_start_time, ndigits=2)} secs")
+
 if __name__ == "__main__":
     asyncio.run(main())

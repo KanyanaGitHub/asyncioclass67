@@ -33,6 +33,7 @@ class Customer:
 async def checkout_customer(queue: Queue, cashier_number: int):
     cashier_count = 0
     customer_total = 0
+    total_time = 0
     while not queue.empty():
         customer: Customer = await queue.get()
         customer_start_time = time.perf_counter()
@@ -45,6 +46,7 @@ async def checkout_customer(queue: Queue, cashier_number: int):
                   f" Product_{product.product_name}"
                   f" in {product.checkout_time} secs")
             await asyncio.sleep(product.checkout_time)
+            total_time += product.checkout_time
         
         print(f"The Cashier_{cashier_number} "
               f"finished checkout Customer_{customer.customer_id}"
@@ -53,7 +55,7 @@ async def checkout_customer(queue: Queue, cashier_number: int):
         customer_total += round(time.perf_counter() - customer_start_time, ndigits=2)
         queue.task_done()
 
-    return cashier_number, cashier_count, round(customer_total, ndigits=2)
+    return cashier_number, cashier_count, total_time, round(customer_total, ndigits=2)
  
 # we implement the generate_customer method as a factory method for producing customers.
 #
@@ -99,7 +101,7 @@ async def main():
     for result in results[1:]:
         print(f"The Cashier_{result[0]}"
               f" take {result[1]}"
-              f" customer total {result[2]}")
+              f" customer total {result[2]:.2f}")
 
     
 if __name__ == "__main__":
